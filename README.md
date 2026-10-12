@@ -27,3 +27,20 @@
 
 ```powershell
 .\run.bat --package react --repository https://registry.npmjs.org --test-mode false --output react_graph.png --ascii-tree true --max-depth 3
+
+## Этап 2. Сбор данных
+
+На втором этапе реализовано получение данных
+о прямых зависимостях npm-пакетов.
+
+Данные загружаются напрямую из npm-репозитория
+без использования npm или сторонних библиотек
+для получения зависимостей.
+
+По умолчанию анализируется версия пакета,
+указанная в теге `latest`.
+
+### Пример запуска
+
+```powershell
+.\run.bat --package express --repository https://registry.npmjs.org --test-mode false --output express_graph.png --ascii-tree false --max-depth 3

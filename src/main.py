@@ -1,8 +1,10 @@
-"""CLI prototype for dependency graph visualizer."""
+"""CLI dependency graph visualizer."""
 
 import argparse
 from pathlib import Path
 from urllib.parse import urlparse
+
+from npm_repository import load_direct_dependencies
 
 
 DEFAULT_OUTPUT = "dependency_graph.png"
@@ -15,7 +17,7 @@ BOOLEAN_VALUES = {
 
 
 def parse_bool(value):
-    """Convert true/false text to a boolean value."""
+    """Convert true/false text to boolean."""
     normalized = value.lower()
 
     if normalized not in BOOLEAN_VALUES:
@@ -27,7 +29,7 @@ def parse_bool(value):
 
 
 def parse_positive_int(value):
-    """Convert text to a positive integer."""
+    """Convert text to positive integer."""
     try:
         number = int(value)
     except ValueError as error:
@@ -44,7 +46,7 @@ def parse_positive_int(value):
 
 
 def validate_package(package):
-    """Validate the package name."""
+    """Validate package name."""
     if not package.strip():
         raise ValueError(
             "имя пакета не может быть пустым"
@@ -52,7 +54,7 @@ def validate_package(package):
 
 
 def validate_output(output):
-    """Validate the output image filename."""
+    """Validate output image filename."""
     path = Path(output)
 
     if not path.name:
@@ -62,18 +64,23 @@ def validate_output(output):
 
     if path.suffix.lower() != ".png":
         raise ValueError(
-            "выходной файл должен иметь расширение .png"
+            "выходной файл должен "
+            "иметь расширение .png"
         )
 
 
-def validate_repository(repository, test_mode):
-    """Validate repository URL or test repository path."""
+def validate_repository(
+    repository,
+    test_mode,
+):
+    """Validate repository URL or test file."""
     if test_mode:
         path = Path(repository)
 
         if not path.is_file():
             raise ValueError(
-                "файл тестового репозитория не найден"
+                "файл тестового "
+                "репозитория не найден"
             )
 
         return
@@ -81,7 +88,8 @@ def validate_repository(repository, test_mode):
     parsed_url = urlparse(repository)
 
     if (
-        parsed_url.scheme not in {"http", "https"}
+        parsed_url.scheme
+        not in {"http", "https"}
         or not parsed_url.netloc
     ):
         raise ValueError(
@@ -90,9 +98,14 @@ def validate_repository(repository, test_mode):
 
 
 def validate_arguments(args):
-    """Validate all command-line parameters."""
-    validate_package(args.package)
-    validate_output(args.output)
+    """Validate command-line parameters."""
+    validate_package(
+        args.package
+    )
+
+    validate_output(
+        args.output
+    )
 
     validate_repository(
         args.repository,
@@ -101,7 +114,7 @@ def validate_arguments(args):
 
 
 def create_parser():
-    """Create the command-line argument parser."""
+    """Create CLI parser."""
     parser = argparse.ArgumentParser(
         description=(
             "Визуализатор графа зависимостей "
@@ -118,27 +131,39 @@ def create_parser():
     parser.add_argument(
         "--repository",
         required=True,
-        help="URL репозитория или путь к тестовому файлу",
+        help=(
+            "URL репозитория или путь "
+            "к тестовому файлу"
+        ),
     )
 
     parser.add_argument(
         "--test-mode",
         type=parse_bool,
         required=True,
-        help="Режим тестового репозитория: true/false",
+        help=(
+            "Режим тестового репозитория: "
+            "true/false"
+        ),
     )
 
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
-        help="Имя PNG-файла с изображением графа",
+        help=(
+            "Имя PNG-файла "
+            "с изображением графа"
+        ),
     )
 
     parser.add_argument(
         "--ascii-tree",
         type=parse_bool,
         required=True,
-        help="Вывод ASCII-дерева: true/false",
+        help=(
+            "Вывод ASCII-дерева: "
+            "true/false"
+        ),
     )
 
     parser.add_argument(
@@ -152,7 +177,7 @@ def create_parser():
 
 
 def print_configuration(args):
-    """Print configuration as key-value pairs."""
+    """Print configuration."""
     print("Параметры конфигурации:")
     print(f"package = {args.package}")
     print(f"repository = {args.repository}")
@@ -162,8 +187,48 @@ def print_configuration(args):
     print(f"max_depth = {args.max_depth}")
 
 
+def print_direct_dependencies(
+    dependencies,
+):
+    """Print direct package dependencies."""
+    print()
+    print("Прямые зависимости:")
+
+    if not dependencies:
+        print("Зависимости отсутствуют.")
+        return
+
+    for name, version in dependencies.items():
+        print(
+            f"{name} = {version}"
+        )
+
+
+def load_stage2_data(
+    args,
+    parser,
+):
+    """Load direct npm dependencies."""
+    if args.test_mode:
+        return
+
+    try:
+        dependencies = (
+            load_direct_dependencies(
+                args.repository,
+                args.package,
+            )
+        )
+    except ValueError as error:
+        parser.error(str(error))
+
+    print_direct_dependencies(
+        dependencies
+    )
+
+
 def main():
-    """Run the stage 1 CLI application."""
+    """Run application."""
     parser = create_parser()
     args = parser.parse_args()
 
@@ -173,6 +238,11 @@ def main():
         parser.error(str(error))
 
     print_configuration(args)
+
+    load_stage2_data(
+        args,
+        parser,
+    )
 
 
 if __name__ == "__main__":
