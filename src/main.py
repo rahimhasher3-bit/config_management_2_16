@@ -15,6 +15,11 @@ from test_repository import (
     load_test_repository,
     validate_package_name,
 )
+from visualization import (
+    graph_to_ascii_tree,
+    graph_to_dot,
+    save_graph_png,
+)
 
 
 DEFAULT_OUTPUT = "dependency_graph.png"
@@ -135,59 +140,40 @@ def create_parser():
     parser.add_argument(
         "--package",
         required=True,
-        help="Имя анализируемого пакета",
     )
 
     parser.add_argument(
         "--repository",
         required=True,
-        help=(
-            "URL репозитория или путь "
-            "к тестовому файлу"
-        ),
     )
 
     parser.add_argument(
         "--test-mode",
         type=parse_bool,
         required=True,
-        help=(
-            "Режим тестового репозитория: "
-            "true/false"
-        ),
     )
 
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
-        help="Имя PNG-файла графа",
     )
 
     parser.add_argument(
         "--ascii-tree",
         type=parse_bool,
         required=True,
-        help=(
-            "Вывод ASCII-дерева: "
-            "true/false"
-        ),
     )
 
     parser.add_argument(
         "--max-depth",
         type=parse_positive_int,
         default=DEFAULT_MAX_DEPTH,
-        help="Максимальная глубина анализа",
     )
 
     parser.add_argument(
         "--reverse",
         type=parse_bool,
         default=False,
-        help=(
-            "Режим обратных зависимостей: "
-            "true/false"
-        ),
     )
 
     return parser
@@ -322,6 +308,32 @@ def print_dependency_graph(
             )
 
 
+def print_visualization(
+    args,
+    graph,
+    dot_text,
+):
+    """Print visualization information."""
+    print()
+    print("Graphviz DOT:")
+    print(dot_text)
+
+    print()
+    print(
+        f"PNG-файл сохранён: {args.output}"
+    )
+
+    if args.ascii_tree:
+        print()
+        print("ASCII-дерево:")
+        print(
+            graph_to_ascii_tree(
+                graph,
+                args.package,
+            )
+        )
+
+
 def main():
     """Run application."""
     parser = create_parser()
@@ -336,6 +348,15 @@ def main():
             args
         )
 
+        dot_text = graph_to_dot(
+            graph
+        )
+
+        save_graph_png(
+            dot_text,
+            args.output,
+        )
+
     except ValueError as error:
         parser.error(
             str(error)
@@ -344,6 +365,12 @@ def main():
     print_dependency_graph(
         graph,
         args.reverse,
+    )
+
+    print_visualization(
+        args,
+        graph,
+        dot_text,
     )
 
 

@@ -90,3 +90,24 @@ E:
 
 ```powershell
 .\run.bat --package D --repository tests/data/graph_branch.txt --test-mode true --output graph.png --ascii-tree false --max-depth 3 --reverse true
+## Этап 5. Визуализация
+
+На пятом этапе реализована визуализация
+графа зависимостей.
+
+Программа:
+
+- формирует текстовое описание графа
+  на языке Graphviz DOT;
+- сохраняет изображение графа в формате PNG;
+- при параметре `--ascii-tree true`
+  выводит зависимости в виде ASCII-дерева;
+- корректно отображает циклические зависимости.
+
+Для создания PNG используется программа
+Graphviz `dot`.
+
+### Пример запуска
+
+```powershell
+.\run.bat --package axios --repository https://registry.npmjs.org --test-mode false --output axios_graph.png --ascii-tree true --max-depth 1
