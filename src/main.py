@@ -4,7 +4,11 @@ import argparse
 from pathlib import Path
 from urllib.parse import urlparse
 
-from dependency_graph import build_dependency_graph
+from dependency_graph import (
+    build_dependency_graph,
+    build_reverse_dependency_graph,
+    graph_contains_package,
+)
 from npm_repository import load_direct_dependencies
 from test_repository import (
     create_test_loader,
@@ -131,41 +135,66 @@ def create_parser():
     parser.add_argument(
         "--package",
         required=True,
+        help="Имя анализируемого пакета",
     )
 
     parser.add_argument(
         "--repository",
         required=True,
+        help=(
+            "URL репозитория или путь "
+            "к тестовому файлу"
+        ),
     )
 
     parser.add_argument(
         "--test-mode",
         type=parse_bool,
         required=True,
+        help=(
+            "Режим тестового репозитория: "
+            "true/false"
+        ),
     )
 
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
+        help="Имя PNG-файла графа",
     )
 
     parser.add_argument(
         "--ascii-tree",
         type=parse_bool,
         required=True,
+        help=(
+            "Вывод ASCII-дерева: "
+            "true/false"
+        ),
     )
 
     parser.add_argument(
         "--max-depth",
         type=parse_positive_int,
         default=DEFAULT_MAX_DEPTH,
+        help="Максимальная глубина анализа",
+    )
+
+    parser.add_argument(
+        "--reverse",
+        type=parse_bool,
+        default=False,
+        help=(
+            "Режим обратных зависимостей: "
+            "true/false"
+        ),
     )
 
     return parser
 
 
 def create_real_loader(repository):
-    """Create loader for real npm repository."""
+    """Create loader for npm repository."""
 
     def loader(package_name):
         return load_direct_dependencies(
@@ -177,7 +206,7 @@ def create_real_loader(repository):
 
 
 def create_dependency_loader(args):
-    """Create real or test dependency loader."""
+    """Create real or test loader."""
     if not args.test_mode:
         return create_real_loader(
             args.repository
@@ -191,7 +220,10 @@ def create_dependency_loader(args):
         args.repository
     )
 
-    if args.package not in graph:
+    if not graph_contains_package(
+        graph,
+        args.package,
+    ):
         raise ValueError(
             "тестовый пакет не найден "
             "в репозитории"
@@ -202,9 +234,77 @@ def create_dependency_loader(args):
     )
 
 
-def print_dependency_graph(graph):
+def build_normal_graph(args):
+    """Build normal dependency graph."""
+    loader = create_dependency_loader(
+        args
+    )
+
+    return build_dependency_graph(
+        args.package,
+        loader,
+        args.max_depth,
+    )
+
+
+def build_reverse_graph(args):
+    """Build reverse dependency graph."""
+    if not args.test_mode:
+        raise ValueError(
+            "режим обратных зависимостей "
+            "используется с тестовым "
+            "репозиторием"
+        )
+
+    validate_package_name(
+        args.package
+    )
+
+    repository_graph = load_test_repository(
+        args.repository
+    )
+
+    if not graph_contains_package(
+        repository_graph,
+        args.package,
+    ):
+        raise ValueError(
+            "тестовый пакет не найден "
+            "в репозитории"
+        )
+
+    return build_reverse_dependency_graph(
+        args.package,
+        repository_graph,
+        args.max_depth,
+    )
+
+
+def build_requested_graph(args):
+    """Build requested graph type."""
+    if args.reverse:
+        return build_reverse_graph(
+            args
+        )
+
+    return build_normal_graph(
+        args
+    )
+
+
+def print_dependency_graph(
+    graph,
+    reverse_mode,
+):
     """Print dependency graph."""
-    print("Граф зависимостей:")
+    if reverse_mode:
+        print(
+            "Граф обратных зависимостей:"
+        )
+    else:
+        print(
+            "Граф зависимостей:"
+        )
 
     for package_name, dependencies in graph.items():
         if dependencies:
@@ -228,23 +328,22 @@ def main():
     args = parser.parse_args()
 
     try:
-        validate_arguments(args)
-
-        loader = create_dependency_loader(
+        validate_arguments(
             args
         )
 
-        graph = build_dependency_graph(
-            args.package,
-            loader,
-            args.max_depth,
+        graph = build_requested_graph(
+            args
         )
 
     except ValueError as error:
-        parser.error(str(error))
+        parser.error(
+            str(error)
+        )
 
     print_dependency_graph(
-        graph
+        graph,
+        args.reverse,
     )
 
 

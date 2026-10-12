@@ -94,3 +94,78 @@ def build_dependency_graph(
         0,
         set(),
     )
+
+
+def reverse_graph(graph):
+    """Reverse all dependency edges."""
+    reversed_graph = {
+        package_name: []
+        for package_name in graph
+    }
+
+    for package_name, dependencies in graph.items():
+        for dependency in dependencies:
+            reversed_graph.setdefault(
+                dependency,
+                [],
+            )
+
+            reversed_graph[dependency].append(
+                package_name
+            )
+
+    for dependencies in reversed_graph.values():
+        dependencies.sort()
+
+    return reversed_graph
+
+
+def create_reverse_loader(graph):
+    """Create loader for reversed graph."""
+    reversed_graph = reverse_graph(
+        graph
+    )
+
+    def loader(package_name):
+        dependencies = reversed_graph.get(
+            package_name,
+            [],
+        )
+
+        return {
+            dependency: "test"
+            for dependency in dependencies
+        }
+
+    return loader
+
+
+def graph_contains_package(
+    graph,
+    package_name,
+):
+    """Check whether package exists in graph."""
+    if package_name in graph:
+        return True
+
+    return any(
+        package_name in dependencies
+        for dependencies in graph.values()
+    )
+
+
+def build_reverse_dependency_graph(
+    package_name,
+    graph,
+    max_depth,
+):
+    """Build reverse dependency graph."""
+    loader = create_reverse_loader(
+        graph
+    )
+
+    return build_dependency_graph(
+        package_name,
+        loader,
+        max_depth,
+    )
