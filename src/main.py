@@ -4,7 +4,13 @@ import argparse
 from pathlib import Path
 from urllib.parse import urlparse
 
+from dependency_graph import build_dependency_graph
 from npm_repository import load_direct_dependencies
+from test_repository import (
+    create_test_loader,
+    load_test_repository,
+    validate_package_name,
+)
 
 
 DEFAULT_OUTPUT = "dependency_graph.png"
@@ -54,7 +60,7 @@ def validate_package(package):
 
 
 def validate_output(output):
-    """Validate output image filename."""
+    """Validate output filename."""
     path = Path(output)
 
     if not path.name:
@@ -73,7 +79,7 @@ def validate_repository(
     repository,
     test_mode,
 ):
-    """Validate repository URL or test file."""
+    """Validate repository parameter."""
     if test_mode:
         path = Path(repository)
 
@@ -114,7 +120,7 @@ def validate_arguments(args):
 
 
 def create_parser():
-    """Create CLI parser."""
+    """Create command-line parser."""
     parser = argparse.ArgumentParser(
         description=(
             "Визуализатор графа зависимостей "
@@ -125,106 +131,95 @@ def create_parser():
     parser.add_argument(
         "--package",
         required=True,
-        help="Имя анализируемого пакета",
     )
 
     parser.add_argument(
         "--repository",
         required=True,
-        help=(
-            "URL репозитория или путь "
-            "к тестовому файлу"
-        ),
     )
 
     parser.add_argument(
         "--test-mode",
         type=parse_bool,
         required=True,
-        help=(
-            "Режим тестового репозитория: "
-            "true/false"
-        ),
     )
 
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
-        help=(
-            "Имя PNG-файла "
-            "с изображением графа"
-        ),
     )
 
     parser.add_argument(
         "--ascii-tree",
         type=parse_bool,
         required=True,
-        help=(
-            "Вывод ASCII-дерева: "
-            "true/false"
-        ),
     )
 
     parser.add_argument(
         "--max-depth",
         type=parse_positive_int,
         default=DEFAULT_MAX_DEPTH,
-        help="Максимальная глубина анализа",
     )
 
     return parser
 
 
-def print_configuration(args):
-    """Print configuration."""
-    print("Параметры конфигурации:")
-    print(f"package = {args.package}")
-    print(f"repository = {args.repository}")
-    print(f"test_mode = {args.test_mode}")
-    print(f"output = {args.output}")
-    print(f"ascii_tree = {args.ascii_tree}")
-    print(f"max_depth = {args.max_depth}")
+def create_real_loader(repository):
+    """Create loader for real npm repository."""
 
-
-def print_direct_dependencies(
-    dependencies,
-):
-    """Print direct package dependencies."""
-    print()
-    print("Прямые зависимости:")
-
-    if not dependencies:
-        print("Зависимости отсутствуют.")
-        return
-
-    for name, version in dependencies.items():
-        print(
-            f"{name} = {version}"
+    def loader(package_name):
+        return load_direct_dependencies(
+            repository,
+            package_name,
         )
 
+    return loader
 
-def load_stage2_data(
-    args,
-    parser,
-):
-    """Load direct npm dependencies."""
-    if args.test_mode:
-        return
 
-    try:
-        dependencies = (
-            load_direct_dependencies(
-                args.repository,
-                args.package,
-            )
+def create_dependency_loader(args):
+    """Create real or test dependency loader."""
+    if not args.test_mode:
+        return create_real_loader(
+            args.repository
         )
-    except ValueError as error:
-        parser.error(str(error))
 
-    print_direct_dependencies(
-        dependencies
+    validate_package_name(
+        args.package
     )
+
+    graph = load_test_repository(
+        args.repository
+    )
+
+    if args.package not in graph:
+        raise ValueError(
+            "тестовый пакет не найден "
+            "в репозитории"
+        )
+
+    return create_test_loader(
+        graph
+    )
+
+
+def print_dependency_graph(graph):
+    """Print dependency graph."""
+    print("Граф зависимостей:")
+
+    for package_name, dependencies in graph.items():
+        if dependencies:
+            dependency_text = ", ".join(
+                dependencies
+            )
+
+            print(
+                f"{package_name} -> "
+                f"{dependency_text}"
+            )
+        else:
+            print(
+                f"{package_name} ->"
+            )
 
 
 def main():
@@ -234,14 +229,22 @@ def main():
 
     try:
         validate_arguments(args)
+
+        loader = create_dependency_loader(
+            args
+        )
+
+        graph = build_dependency_graph(
+            args.package,
+            loader,
+            args.max_depth,
+        )
+
     except ValueError as error:
         parser.error(str(error))
 
-    print_configuration(args)
-
-    load_stage2_data(
-        args,
-        parser,
+    print_dependency_graph(
+        graph
     )
 
 
