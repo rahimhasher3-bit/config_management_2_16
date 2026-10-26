@@ -103,8 +103,7 @@ def validate_repository(
     parsed_url = urlparse(repository)
 
     if (
-        parsed_url.scheme
-        not in {"http", "https"}
+        parsed_url.scheme not in {"http", "https"}
         or not parsed_url.netloc
     ):
         raise ValueError(
@@ -114,13 +113,8 @@ def validate_repository(
 
 def validate_arguments(args):
     """Validate command-line parameters."""
-    validate_package(
-        args.package
-    )
-
-    validate_output(
-        args.output
-    )
+    validate_package(args.package)
+    validate_output(args.output)
 
     validate_repository(
         args.repository,
@@ -128,15 +122,8 @@ def validate_arguments(args):
     )
 
 
-def create_parser():
-    """Create command-line parser."""
-    parser = argparse.ArgumentParser(
-        description=(
-            "Визуализатор графа зависимостей "
-            "для npm-пакетов"
-        )
-    )
-
+def add_repository_arguments(parser):
+    """Add package and repository arguments."""
     parser.add_argument(
         "--package",
         required=True,
@@ -153,6 +140,9 @@ def create_parser():
         required=True,
     )
 
+
+def add_visualization_arguments(parser):
+    """Add visualization arguments."""
     parser.add_argument(
         "--output",
         default=DEFAULT_OUTPUT,
@@ -164,6 +154,9 @@ def create_parser():
         required=True,
     )
 
+
+def add_graph_arguments(parser):
+    """Add graph traversal arguments."""
     parser.add_argument(
         "--max-depth",
         type=parse_positive_int,
@@ -175,6 +168,20 @@ def create_parser():
         type=parse_bool,
         default=False,
     )
+
+
+def create_parser():
+    """Create command-line parser."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Визуализатор графа зависимостей "
+            "для npm-пакетов"
+        )
+    )
+
+    add_repository_arguments(parser)
+    add_visualization_arguments(parser)
+    add_graph_arguments(parser)
 
     return parser
 
@@ -198,9 +205,7 @@ def create_dependency_loader(args):
             args.repository
         )
 
-    validate_package_name(
-        args.package
-    )
+    validate_package_name(args.package)
 
     graph = load_test_repository(
         args.repository
@@ -215,16 +220,12 @@ def create_dependency_loader(args):
             "в репозитории"
         )
 
-    return create_test_loader(
-        graph
-    )
+    return create_test_loader(graph)
 
 
 def build_normal_graph(args):
     """Build normal dependency graph."""
-    loader = create_dependency_loader(
-        args
-    )
+    loader = create_dependency_loader(args)
 
     return build_dependency_graph(
         args.package,
@@ -233,18 +234,9 @@ def build_normal_graph(args):
     )
 
 
-def build_reverse_graph(args):
-    """Build reverse dependency graph."""
-    if not args.test_mode:
-        raise ValueError(
-            "режим обратных зависимостей "
-            "используется с тестовым "
-            "репозиторием"
-        )
-
-    validate_package_name(
-        args.package
-    )
+def load_reverse_repository(args):
+    """Load repository for reverse mode."""
+    validate_package_name(args.package)
 
     repository_graph = load_test_repository(
         args.repository
@@ -259,6 +251,20 @@ def build_reverse_graph(args):
             "в репозитории"
         )
 
+    return repository_graph
+
+
+def build_reverse_graph(args):
+    """Build reverse dependency graph."""
+    if not args.test_mode:
+        raise ValueError(
+            "режим обратных зависимостей "
+            "используется с тестовым "
+            "репозиторием"
+        )
+
+    repository_graph = load_reverse_repository(args)
+
     return build_reverse_dependency_graph(
         args.package,
         repository_graph,
@@ -269,13 +275,23 @@ def build_reverse_graph(args):
 def build_requested_graph(args):
     """Build requested graph type."""
     if args.reverse:
-        return build_reverse_graph(
-            args
-        )
+        return build_reverse_graph(args)
 
-    return build_normal_graph(
-        args
-    )
+    return build_normal_graph(args)
+
+
+def print_graph_line(package_name, dependencies):
+    """Print one graph line."""
+    if dependencies:
+        dependency_text = ", ".join(dependencies)
+        print(
+            f"{package_name} -> "
+            f"{dependency_text}"
+        )
+    else:
+        print(
+            f"{package_name} ->"
+        )
 
 
 def print_dependency_graph(
@@ -284,28 +300,30 @@ def print_dependency_graph(
 ):
     """Print dependency graph."""
     if reverse_mode:
-        print(
-            "Граф обратных зависимостей:"
-        )
+        print("Граф обратных зависимостей:")
     else:
-        print(
-            "Граф зависимостей:"
-        )
+        print("Граф зависимостей:")
 
     for package_name, dependencies in graph.items():
-        if dependencies:
-            dependency_text = ", ".join(
-                dependencies
-            )
+        print_graph_line(
+            package_name,
+            dependencies,
+        )
 
-            print(
-                f"{package_name} -> "
-                f"{dependency_text}"
-            )
-        else:
-            print(
-                f"{package_name} ->"
-            )
+
+def print_ascii_tree(args, graph):
+    """Print ASCII tree when enabled."""
+    if not args.ascii_tree:
+        return
+
+    print()
+    print("ASCII-дерево:")
+    print(
+        graph_to_ascii_tree(
+            graph,
+            args.package,
+        )
+    )
 
 
 def print_visualization(
@@ -323,15 +341,23 @@ def print_visualization(
         f"PNG-файл сохранён: {args.output}"
     )
 
-    if args.ascii_tree:
-        print()
-        print("ASCII-дерево:")
-        print(
-            graph_to_ascii_tree(
-                graph,
-                args.package,
-            )
-        )
+    print_ascii_tree(
+        args,
+        graph,
+    )
+
+
+def build_visualization(args):
+    """Build graph and visualization."""
+    graph = build_requested_graph(args)
+    dot_text = graph_to_dot(graph)
+
+    save_graph_png(
+        dot_text,
+        args.output,
+    )
+
+    return graph, dot_text
 
 
 def main():
@@ -340,27 +366,11 @@ def main():
     args = parser.parse_args()
 
     try:
-        validate_arguments(
-            args
-        )
-
-        graph = build_requested_graph(
-            args
-        )
-
-        dot_text = graph_to_dot(
-            graph
-        )
-
-        save_graph_png(
-            dot_text,
-            args.output,
-        )
+        validate_arguments(args)
+        graph, dot_text = build_visualization(args)
 
     except ValueError as error:
-        parser.error(
-            str(error)
-        )
+        parser.error(str(error))
 
     print_dependency_graph(
         graph,

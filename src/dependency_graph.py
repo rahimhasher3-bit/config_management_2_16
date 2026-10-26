@@ -1,4 +1,60 @@
+
 """Dependency graph traversal functions."""
+
+
+def get_dependency_names(package_name, dependency_loader):
+    """Load and sort dependency names."""
+    dependencies = dependency_loader(package_name)
+    return sorted(dependencies.keys())
+
+
+def add_unvisited_dependencies(
+    dependency_names,
+    visited,
+    queued,
+    next_level,
+):
+    """Add new dependencies to the next BFS level."""
+    for dependency in dependency_names:
+        if dependency in visited or dependency in queued:
+            continue
+
+        queued.add(dependency)
+        next_level.append(dependency)
+
+
+def process_package(
+    package_name,
+    graph,
+    dependency_loader,
+    max_depth,
+    depth,
+    visited,
+    queued,
+    next_level,
+):
+    """Process one package in the current BFS level."""
+    if package_name in visited:
+        return
+
+    visited.add(package_name)
+
+    if depth >= max_depth:
+        graph.setdefault(package_name, [])
+        return
+
+    dependency_names = get_dependency_names(
+        package_name,
+        dependency_loader,
+    )
+    graph[package_name] = dependency_names
+
+    add_unvisited_dependencies(
+        dependency_names,
+        visited,
+        queued,
+        next_level,
+    )
 
 
 def process_level(
@@ -14,37 +70,16 @@ def process_level(
     queued = set()
 
     for package_name in packages:
-        if package_name in visited:
-            continue
-
-        visited.add(package_name)
-
-        if depth >= max_depth:
-            graph.setdefault(
-                package_name,
-                [],
-            )
-            continue
-
-        dependencies = dependency_loader(
-            package_name
+        process_package(
+            package_name,
+            graph,
+            dependency_loader,
+            max_depth,
+            depth,
+            visited,
+            queued,
+            next_level,
         )
-
-        dependency_names = sorted(
-            dependencies.keys()
-        )
-
-        graph[package_name] = dependency_names
-
-        for dependency in dependency_names:
-            if dependency in visited:
-                continue
-
-            if dependency in queued:
-                continue
-
-            queued.add(dependency)
-            next_level.append(dependency)
 
     return next_level
 
@@ -105,14 +140,8 @@ def reverse_graph(graph):
 
     for package_name, dependencies in graph.items():
         for dependency in dependencies:
-            reversed_graph.setdefault(
-                dependency,
-                [],
-            )
-
-            reversed_graph[dependency].append(
-                package_name
-            )
+            reversed_graph.setdefault(dependency, [])
+            reversed_graph[dependency].append(package_name)
 
     for dependencies in reversed_graph.values():
         dependencies.sort()
@@ -122,16 +151,13 @@ def reverse_graph(graph):
 
 def create_reverse_loader(graph):
     """Create loader for reversed graph."""
-    reversed_graph = reverse_graph(
-        graph
-    )
+    reversed_graph = reverse_graph(graph)
 
     def loader(package_name):
         dependencies = reversed_graph.get(
             package_name,
             [],
         )
-
         return {
             dependency: "test"
             for dependency in dependencies
@@ -160,9 +186,7 @@ def build_reverse_dependency_graph(
     max_depth,
 ):
     """Build reverse dependency graph."""
-    loader = create_reverse_loader(
-        graph
-    )
+    loader = create_reverse_loader(graph)
 
     return build_dependency_graph(
         package_name,

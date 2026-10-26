@@ -1,3 +1,4 @@
+
 """Work with npm repository metadata."""
 
 import json
@@ -23,31 +24,29 @@ def build_package_url(repository, package_name):
     )
 
 
-def fetch_package_metadata(
-    repository,
-    package_name,
-):
-    """Download npm package metadata."""
+def build_request(repository, package_name):
+    """Create request for npm package metadata."""
     url = build_package_url(
         repository,
         package_name,
     )
 
-    request = Request(
+    return Request(
         url,
         headers={
             "User-Agent": "dependency-graph-visualizer"
         },
     )
 
+
+def read_response_text(request, package_name):
+    """Download package metadata as text."""
     try:
         with urlopen(
             request,
             timeout=REQUEST_TIMEOUT,
         ) as response:
-            text = response.read().decode(
-                "utf-8"
-            )
+            return response.read().decode("utf-8")
 
     except HTTPError as error:
         raise ValueError(
@@ -60,6 +59,9 @@ def fetch_package_metadata(
             "к репозиторию"
         ) from error
 
+
+def parse_metadata(text):
+    """Parse npm metadata JSON."""
     try:
         return json.loads(text)
 
@@ -68,6 +70,24 @@ def fetch_package_metadata(
             "репозиторий вернул "
             "некорректный JSON"
         ) from error
+
+
+def fetch_package_metadata(
+    repository,
+    package_name,
+):
+    """Download npm package metadata."""
+    request = build_request(
+        repository,
+        package_name,
+    )
+
+    text = read_response_text(
+        request,
+        package_name,
+    )
+
+    return parse_metadata(text)
 
 
 def get_latest_version(metadata):
@@ -87,20 +107,14 @@ def get_latest_version(metadata):
     return version
 
 
-def get_direct_dependencies(metadata):
-    """Return dependencies of latest version."""
-    version = get_latest_version(
-        metadata
-    )
-
+def get_version_data(metadata, version):
+    """Return metadata for a package version."""
     versions = metadata.get(
         "versions",
         {},
     )
 
-    package_data = versions.get(
-        version
-    )
+    package_data = versions.get(version)
 
     if not isinstance(
         package_data,
@@ -109,6 +123,18 @@ def get_direct_dependencies(metadata):
         raise ValueError(
             "данные версии пакета не найдены"
         )
+
+    return package_data
+
+
+def get_direct_dependencies(metadata):
+    """Return dependencies of latest version."""
+    version = get_latest_version(metadata)
+
+    package_data = get_version_data(
+        metadata,
+        version,
+    )
 
     dependencies = package_data.get(
         "dependencies",
@@ -136,6 +162,4 @@ def load_direct_dependencies(
         package_name,
     )
 
-    return get_direct_dependencies(
-        metadata
-    )
+    return get_direct_dependencies(metadata)

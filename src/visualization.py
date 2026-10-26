@@ -1,3 +1,4 @@
+
 """Graph visualization functions."""
 
 import shutil
@@ -17,9 +18,7 @@ def find_dot():
     if dot_path:
         return dot_path
 
-    windows_path = Path(
-        WINDOWS_DOT_PATH
-    )
+    windows_path = Path(WINDOWS_DOT_PATH)
 
     if windows_path.is_file():
         return str(windows_path)
@@ -37,42 +36,52 @@ def escape_dot_text(text):
     )
 
 
-def graph_to_dot(graph):
-    """Convert dependency graph to DOT."""
+def collect_nodes(graph):
+    """Collect all graph nodes."""
     nodes = set(graph)
 
     for dependencies in graph.values():
         nodes.update(dependencies)
 
-    lines = [
-        "digraph dependencies {",
-        "    rankdir=LR;",
-    ]
+    return sorted(nodes)
 
-    for node in sorted(nodes):
-        escaped_node = escape_dot_text(
-            node
-        )
 
+def append_dot_nodes(lines, nodes):
+    """Append DOT node declarations."""
+    for node in nodes:
+        escaped_node = escape_dot_text(node)
         lines.append(
             f'    "{escaped_node}";'
         )
 
-    for source in sorted(graph):
-        for target in graph[source]:
-            escaped_source = escape_dot_text(
-                source
-            )
 
+def append_dot_edges(lines, graph):
+    """Append DOT dependency edges."""
+    for source in sorted(graph):
+        escaped_source = escape_dot_text(source)
+
+        for target in graph[source]:
             escaped_target = escape_dot_text(
                 target
             )
-
             lines.append(
                 f'    "{escaped_source}" -> '
                 f'"{escaped_target}";'
             )
 
+
+def graph_to_dot(graph):
+    """Convert dependency graph to DOT."""
+    lines = [
+        "digraph dependencies {",
+        "    rankdir=LR;",
+    ]
+
+    append_dot_nodes(
+        lines,
+        collect_nodes(graph),
+    )
+    append_dot_edges(lines, graph)
     lines.append("}")
 
     return "\n".join(lines)
@@ -101,10 +110,54 @@ def save_graph_png(
 
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip()
-
         raise ValueError(
             f"ошибка Graphviz: {message}"
         ) from error
+
+
+def get_connector(is_last):
+    """Return ASCII tree connector."""
+    if is_last:
+        return "└── "
+
+    return "├── "
+
+
+def get_child_prefix(prefix, is_last):
+    """Return prefix for child level."""
+    branch = "    " if is_last else "│   "
+    return prefix + branch
+
+
+def append_ascii_dependency(
+    graph,
+    dependency,
+    prefix,
+    is_last,
+    path,
+    lines,
+):
+    """Append one dependency to ASCII tree."""
+    cycle = dependency in path
+    suffix = " [cycle]" if cycle else ""
+
+    lines.append(
+        prefix
+        + get_connector(is_last)
+        + dependency
+        + suffix
+    )
+
+    if cycle:
+        return
+
+    append_ascii_children(
+        graph,
+        dependency,
+        get_child_prefix(prefix, is_last),
+        path | {dependency},
+        lines,
+    )
 
 
 def append_ascii_children(
@@ -123,49 +176,14 @@ def append_ascii_children(
     for index, dependency in enumerate(
         dependencies
     ):
-        is_last = (
-            index
-            == len(dependencies) - 1
-        )
+        is_last = index == len(dependencies) - 1
 
-        connector = (
-            "└── "
-            if is_last
-            else "├── "
-        )
-
-        cycle = dependency in path
-
-        suffix = (
-            " [cycle]"
-            if cycle
-            else ""
-        )
-
-        lines.append(
-            prefix
-            + connector
-            + dependency
-            + suffix
-        )
-
-        if cycle:
-            continue
-
-        child_prefix = (
-            prefix
-            + (
-                "    "
-                if is_last
-                else "│   "
-            )
-        )
-
-        append_ascii_children(
+        append_ascii_dependency(
             graph,
             dependency,
-            child_prefix,
-            path | {dependency},
+            prefix,
+            is_last,
+            path,
             lines,
         )
 
@@ -175,9 +193,7 @@ def graph_to_ascii_tree(
     root_package,
 ):
     """Convert graph to ASCII tree."""
-    lines = [
-        root_package
-    ]
+    lines = [root_package]
 
     append_ascii_children(
         graph,
