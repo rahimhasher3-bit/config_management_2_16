@@ -1,4 +1,3 @@
-
 """Dependency graph traversal functions."""
 
 
@@ -29,11 +28,11 @@ def process_package(
     dependency_loader,
     max_depth,
     depth,
-    visited,
-    queued,
-    next_level,
+    state,
 ):
     """Process one package in the current BFS level."""
+    visited = state["visited"]
+
     if package_name in visited:
         return
 
@@ -52,8 +51,8 @@ def process_package(
     add_unvisited_dependencies(
         dependency_names,
         visited,
-        queued,
-        next_level,
+        state["queued"],
+        state["next_level"],
     )
 
 
@@ -66,8 +65,11 @@ def process_level(
     visited,
 ):
     """Process one BFS level."""
-    next_level = []
-    queued = set()
+    state = {
+        "visited": visited,
+        "queued": set(),
+        "next_level": [],
+    }
 
     for package_name in packages:
         process_package(
@@ -76,12 +78,10 @@ def process_level(
             dependency_loader,
             max_depth,
             depth,
-            visited,
-            queued,
-            next_level,
+            state,
         )
 
-    return next_level
+    return state["next_level"]
 
 
 def bfs_recursive(
